@@ -1,32 +1,43 @@
-# React + TypeScript + Vite
+# Sky — สภาพอากาศเขตประเวศ
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+เว็บแอปพยากรณ์อากาศภาษาไทย สำหรับ 50 เขตในกรุงเทพมหานคร (ค่าเริ่มต้น: เขตประเวศ) ดึงข้อมูลสด ๆ จาก [Open-Meteo](https://open-meteo.com/) แบบไม่ต้องใช้ API key
 
-Currently, two official plugins are available:
+Live: https://sky.benyapol.com
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ฟีเจอร์
 
-## React Compiler
+- อุณหภูมิปัจจุบัน, อุณหภูมิที่รู้สึกได้, ความชื้น, ค่าฝุ่น PM2.5
+- โอกาสฝนตกและช่วงเวลาที่ฝนจะตกหนักที่สุดในอีก 12 ชั่วโมงข้างหน้า
+- พยากรณ์รายชั่วโมง (6 ช่วง ห่างกันช่วงละ 3 ชั่วโมง)
+- คำแนะนำกิจกรรมตามสภาพอากาศ
+- ค้นหาและสลับเขตได้ทั้ง 50 เขตของกรุงเทพฯ พร้อมจำตำแหน่งล่าสุดไว้ใน `localStorage`
+- สถานะ loading (skeleton) และ error state พร้อมปุ่มลองใหม่
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the Oxlint configuration
+- React 19 + TypeScript
+- Vite 8
+- Tailwind CSS 4
+- lucide-react (ไอคอน)
+- Open-Meteo Forecast / Air Quality / Geocoding API
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## พัฒนาแบบ Local
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # เปิด dev server พร้อม HMR
+npm run build    # type-check + build production ไปที่ dist/
+npm run preview  # ดูผล production build
+npm run lint      # oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Deploy
+
+รันเป็น Docker container (multi-stage build → nginx serve static files):
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+Container ฟังที่ `127.0.0.1:8083` และเข้าถึงผ่านโดเมนจริงด้วย Cloudflare Tunnel ที่ `sky.benyapol.com`
