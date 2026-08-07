@@ -1,32 +1,58 @@
-# React + TypeScript + Vite
+# Sky — พยากรณ์อากาศกรุงเทพฯ รายเขต
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+เว็บแอปพยากรณ์อากาศสำหรับ 50 เขตของกรุงเทพมหานคร ดีไซน์แนวหนังสือพิมพ์/กระดาษ พร้อมคำแนะนำกิจกรรมประจำวันจากสภาพอากาศจริง
 
-Currently, two official plugins are available:
+## ฟีเจอร์หลัก
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **พยากรณ์อากาศรายเขต** ครบทั้ง 50 เขตของกรุงเทพฯ ค้นหาพื้นที่อื่นทั่วโลกได้ หรือใช้ตำแหน่งปัจจุบันอัตโนมัติ
+- **PM2.5 จากสถานีตรวจวัดจริง** (ผ่าน WAQI ซึ่งรวมข้อมูลจากกรมควบคุมมลพิษ) แม่นยำกว่าค่าประมาณการจากแบบจำลองบรรยากาศทั่วไป พร้อม fallback อัตโนมัติเมื่อไม่มีสถานีใกล้เคียง
+- **ฉากอนิเมชันสภาพอากาศ** ที่เปลี่ยนไปตามสภาพจริง — ฝนตก เมฆลอย แดดออก หรือพระจันทร์กับดาวยามค่ำคืน
+- **คำแนะนำกิจกรรมประจำวัน** เช่น ควรพกร่มไหม ตากผ้าได้ไหม ควรสวมหน้ากากไหม คำนวณจากฝน ฝุ่น และอุณหภูมิจริง
+- **Mobile-first** พร้อม pull-to-refresh, bottom sheet ค้นหาพื้นที่, และรองรับ safe-area ของมือถือรุ่นใหม่
+- เช็คตำแหน่งปัจจุบันอัตโนมัติเมื่อเปิดเว็บ (พร้อมคำอธิบายก่อนขอสิทธิ์ในการเข้าถึงตำแหน่ง)
+- รีเฟรชข้อมูลอัตโนมัติทุก 10 นาที และมี skeleton loading ระหว่างโหลดข้อมูล
 
-## React Compiler
+## แหล่งข้อมูล
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- พยากรณ์อากาศและพิกัด: [Open-Meteo](https://open-meteo.com/) (ฟรี ไม่ต้องใช้ API key)
+- คุณภาพอากาศจากสถานีจริง: [WAQI](https://waqi.info/) (ต้องใช้ token ฟรี — ดูวิธีตั้งค่าด้านล่าง) พร้อม fallback เป็นค่าประมาณการจาก Open-Meteo Air Quality API เมื่อไม่มี token หรือดึงข้อมูลไม่สำเร็จ
 
-## Expanding the Oxlint configuration
+## เทคโนโลยีที่ใช้
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+React 19 · TypeScript · Vite · Tailwind CSS v4 · lucide-react
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+## เริ่มต้นใช้งาน
+
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### ตั้งค่า PM2.5 จากสถานีจริง (ไม่บังคับ)
+
+โดยดีฟอลต์แอปจะใช้ค่าประมาณการ PM2.5 จากแบบจำลองบรรยากาศ ถ้าต้องการข้อมูลที่แม่นยำขึ้นจากสถานีตรวจวัดจริง:
+
+1. ขอ token ฟรีที่ [aqicn.org/data-platform/token](https://aqicn.org/data-platform/token/)
+2. คัดลอก `.env.example` เป็น `.env.local`
+3. วาง token ที่ได้ลงในตัวแปร `VITE_WAQI_TOKEN`
+4. รัน `npm run dev` ใหม่
+
+## คำสั่งที่ใช้ได้
+
+| คำสั่ง            | คำอธิบาย                          |
+| ------------------ | ---------------------------------- |
+| `npm run dev`     | รันเซิร์ฟเวอร์พัฒนา (Vite)       |
+| `npm run build`   | ตรวจชนิดข้อมูลด้วย `tsc` แล้ว build |
+| `npm run lint`    | ตรวจโค้ดด้วย Oxlint                |
+| `npm run preview` | พรีวิว production build ในเครื่อง |
+
+## โครงสร้างโปรเจกต์
+
+```
+src/
+├── api/weather.ts          เรียก API พยากรณ์อากาศ/คุณภาพอากาศ/ค้นหาพื้นที่
+├── components/             UI components (Hero, WeatherScene, HourlyForecast, ...)
+├── data/districts.ts       รายชื่อและพิกัด 50 เขตของกรุงเทพฯ
+├── utils/                  ตรรกะคำนวณ (คำแนะนำกิจกรรม, ธีมสี, ฟอร์แมตข้อความ, ตำแหน่ง)
+└── types.ts                TypeScript types หลักของแอป
+```

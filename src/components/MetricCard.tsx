@@ -6,7 +6,6 @@ interface MetricCardProps {
   value: string
   unit?: string
   valueColor: string
-  badgeBg: string
   subLabel: string
 }
 
@@ -16,32 +15,23 @@ export function MetricCard({
   value,
   unit,
   valueColor,
-  badgeBg,
   subLabel,
 }: MetricCardProps) {
   return (
-    <div className="group rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-text-muted)]/40 hover:shadow-[var(--shadow-card-hover)]">
-      <div className="flex items-center gap-2">
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-lg ${badgeBg} ${valueColor}`}
-        >
-          <Icon size={16} />
-        </div>
-        <span className="text-sm text-[var(--color-text-soft)]">{label}</span>
+    <div className="flex-1 p-5">
+      <div className="flex items-center gap-1.5 text-[var(--color-text-muted)]">
+        <Icon size={14} strokeWidth={2} />
+        <span className="text-xs font-medium uppercase tracking-wider">{label}</span>
       </div>
-      <div className="mt-3.5 flex items-baseline gap-1">
-        <span className={`text-3xl font-semibold tabular-nums ${valueColor}`}>
+      <div className="mt-3 flex items-baseline gap-1">
+        <span
+          className={`font-[family-name:var(--font-display)] text-3xl font-medium tabular-nums ${valueColor}`}
+        >
           {value}
         </span>
-        {unit && (
-          <span className="text-base text-[var(--color-text-muted)]">
-            {unit}
-          </span>
-        )}
+        {unit && <span className="text-sm text-[var(--color-text-muted)]">{unit}</span>}
       </div>
-      <p className="mt-1.5 truncate text-xs text-[var(--color-text-muted)]">
-        {subLabel}
-      </p>
+      <p className="mt-1.5 truncate text-xs text-[var(--color-text-muted)]">{subLabel}</p>
     </div>
   )
 }

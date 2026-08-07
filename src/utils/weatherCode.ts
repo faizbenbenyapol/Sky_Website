@@ -8,6 +8,8 @@ import {
   CloudRainWind,
   CloudSnow,
   CloudLightning,
+  Moon,
+  CloudMoon,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -47,7 +49,13 @@ const WEATHER_CODE_MAP: Record<number, WeatherCodeInfo> = {
   99: { label: 'พายุฝนฟ้าคะนองและลูกเห็บหนัก', icon: CloudLightning },
 }
 
-export function getWeatherInfo(code: number): WeatherCodeInfo {
+export function getWeatherInfo(code: number, isDay = true): WeatherCodeInfo {
+  if (!isDay) {
+    if (code === 0) return { label: 'ท้องฟ้าแจ่มใส', icon: Moon }
+    if (code === 1 || code === 2) {
+      return { label: 'มีเมฆบางส่วน', icon: CloudMoon }
+    }
+  }
   return WEATHER_CODE_MAP[code] ?? { label: 'ไม่ทราบสภาพอากาศ', icon: Cloud }
 }
 

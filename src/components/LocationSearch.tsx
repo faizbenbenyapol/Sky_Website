@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Search, X, MapPin, Loader2 } from 'lucide-react'
+import { Search, X, MapPin, Loader2, LocateFixed } from 'lucide-react'
 import type { LocationInfo } from '../types'
 import { BANGKOK_DISTRICTS, searchDistricts } from '../data/districts'
 import { searchLocationsOnline } from '../api/weather'
+import { getCurrentLocation } from '../utils/geolocation'
 
 interface LocationSearchProps {
   isOpen: boolean
@@ -18,15 +19,27 @@ export function LocationSearch({
   const [query, setQuery] = useState('')
   const [onlineResults, setOnlineResults] = useState<LocationInfo[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [isLocating, setIsLocating] = useState(false)
+  const [locateError, setLocateError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isOpen) {
       setQuery('')
       setOnlineResults([])
+      setLocateError(null)
       requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   useEffect(() => {
     const trimmed = query.trim()
@@ -55,23 +68,49 @@ export function LocationSearch({
     onClose()
   }
 
+  const handleUseCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      setLocateError('อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง')
+      return
+    }
+    setLocateError(null)
+    setIsLocating(true)
+    const location = await getCurrentLocation({ timeout: 10000 })
+    setIsLocating(false)
+    if (location) {
+      handleSelect(location)
+    } else {
+      setLocateError('ไม่สามารถเข้าถึงตำแหน่งของคุณได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง')
+    }
+  }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-20"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+      style={{ animation: 'fade-in 0.18s ease-out' }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-soft)] shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="ค้นหาพื้นที่"
+        className="flex max-h-[85vh] w-full flex-col border-t border-[var(--color-border)] bg-[var(--color-bg-soft)] sm:max-h-[32rem] sm:max-w-md sm:border"
+        style={{ animation: 'sheet-up 0.22s cubic-bezier(0.32, 0.72, 0, 1)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
+        <div className="flex justify-center pb-1 pt-2.5 sm:hidden">
+          <span className="h-1 w-9 rounded-full bg-[var(--color-border)]" />
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
           <Search size={18} className="text-[var(--color-text-muted)]" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ค้นหาเขตหรือพื้นที่..."
-            className="flex-1 bg-transparent text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] sm:text-base"
+            inputMode="search"
+            className="flex-1 bg-transparent text-base text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
           />
           {isSearching && (
             <Loader2
@@ -83,12 +122,34 @@ export function LocationSearch({
             type="button"
             onClick={onClose}
             aria-label="ปิด"
-            className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            className="flex h-7 w-7 shrink-0 items-center justify-center text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
           >
             <X size={18} />
           </button>
         </div>
-        <div className="max-h-80 overflow-y-auto py-2">
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2 [padding-bottom:max(0.5rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={isLocating}
+            className="flex w-full items-center gap-3 border-b border-[var(--color-border)] px-4 py-3 text-left transition-colors hover:bg-[var(--color-surface)] disabled:opacity-60"
+          >
+            {isLocating ? (
+              <Loader2
+                size={16}
+                className="shrink-0 animate-spin text-[var(--color-accent)]"
+              />
+            ) : (
+              <LocateFixed size={16} className="shrink-0 text-[var(--color-accent)]" />
+            )}
+            <span className="text-base text-[var(--color-text)]">
+              {isLocating ? 'กำลังค้นหาตำแหน่ง...' : 'ใช้ตำแหน่งปัจจุบันของฉัน'}
+            </span>
+          </button>
+          {locateError && (
+            <p className="px-4 py-2 text-xs text-[var(--color-bad)]">{locateError}</p>
+          )}
           {localResults.length === 0 && extraOnline.length === 0 && (
             <p className="px-4 py-6 text-center text-sm text-[var(--color-text-muted)]">
               ไม่พบพื้นที่ที่ค้นหา
@@ -99,13 +160,13 @@ export function LocationSearch({
               key={`local-${loc.name}`}
               type="button"
               onClick={() => handleSelect(loc)}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[var(--color-surface)]"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--color-surface)] active:bg-[var(--color-surface-hover)]"
             >
               <MapPin size={16} className="shrink-0 text-[var(--color-accent)]" />
-              <span className="text-sm text-[var(--color-text)] sm:text-base">
+              <span className="text-base text-[var(--color-text)]">
                 เขต{loc.name}
               </span>
-              <span className="ml-auto text-xs text-[var(--color-text-muted)]">
+              <span className="ml-auto shrink-0 text-xs text-[var(--color-text-muted)]">
                 {loc.admin}
               </span>
             </button>
@@ -115,13 +176,11 @@ export function LocationSearch({
               key={`online-${loc.name}-${loc.lat}`}
               type="button"
               onClick={() => handleSelect(loc)}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[var(--color-surface)]"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--color-surface)] active:bg-[var(--color-surface-hover)]"
             >
               <MapPin size={16} className="shrink-0 text-[var(--color-text-muted)]" />
-              <span className="text-sm text-[var(--color-text)] sm:text-base">
-                {loc.name}
-              </span>
-              <span className="ml-auto text-xs text-[var(--color-text-muted)]">
+              <span className="text-base text-[var(--color-text)]">{loc.name}</span>
+              <span className="ml-auto shrink-0 text-xs text-[var(--color-text-muted)]">
                 {loc.admin}
               </span>
             </button>

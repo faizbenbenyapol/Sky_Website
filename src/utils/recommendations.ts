@@ -5,7 +5,7 @@ import {
   Wind,
   type LucideIcon,
 } from 'lucide-react'
-import type { SeverityLevel, WeatherData } from '../types'
+import type { Pm25Reading, SeverityLevel, WeatherData } from '../types'
 import { isHeavyRain } from './weatherCode'
 
 export interface PM25Info {
@@ -13,10 +13,20 @@ export interface PM25Info {
   severity: SeverityLevel
 }
 
-export function getPM25Info(pm25: number): PM25Info {
-  if (pm25 <= 25) return { level: 'ดี', severity: 'good' }
-  if (pm25 <= 37) return { level: 'ปานกลาง', severity: 'warn' }
-  if (pm25 <= 50) return { level: 'เริ่มมีผลกระทบ', severity: 'warn' }
+// เกณฑ์ AQI มาจากสถานีตรวจวัดจริง (มาตรฐาน US EPA ที่ WAQI ใช้คำนวณ)
+// เกณฑ์ µg/m³ มาจากค่าประมาณการแบบจำลองบรรยากาศ อิงเกณฑ์กรมควบคุมมลพิษไทย
+export function getPM25Info(pm25: Pm25Reading | null): PM25Info {
+  if (pm25 === null) return { level: 'ไม่มีข้อมูล', severity: 'unknown' }
+  if (pm25.unit === 'aqi') {
+    if (pm25.value <= 50) return { level: 'ดี', severity: 'good' }
+    if (pm25.value <= 100) return { level: 'ปานกลาง', severity: 'warn' }
+    if (pm25.value <= 150) return { level: 'เริ่มมีผลกระทบต่อกลุ่มเสี่ยง', severity: 'warn' }
+    if (pm25.value <= 200) return { level: 'มีผลกระทบต่อสุขภาพ', severity: 'bad' }
+    return { level: 'มีผลกระทบต่อสุขภาพมาก', severity: 'bad' }
+  }
+  if (pm25.value <= 25) return { level: 'ดี', severity: 'good' }
+  if (pm25.value <= 37) return { level: 'ปานกลาง', severity: 'warn' }
+  if (pm25.value <= 50) return { level: 'เริ่มมีผลกระทบ', severity: 'warn' }
   return { level: 'มีผลกระทบต่อสุขภาพ', severity: 'bad' }
 }
 
@@ -128,13 +138,21 @@ export function getActivityRecommendations(data: WeatherData): ActivityItem[] {
             answer: 'ควรพิจารณา',
             severity: 'warn',
           }
-        : {
-            id: 'mask',
-            icon: Wind,
-            question: 'ควรสวมหน้ากากไหม',
-            answer: 'ไม่จำเป็น',
-            severity: 'good',
-          }
+        : pm25Info.severity === 'unknown'
+          ? {
+              id: 'mask',
+              icon: Wind,
+              question: 'ควรสวมหน้ากากไหม',
+              answer: 'ไม่มีข้อมูลฝุ่น',
+              severity: 'unknown',
+            }
+          : {
+              id: 'mask',
+              icon: Wind,
+              question: 'ควรสวมหน้ากากไหม',
+              answer: 'ไม่จำเป็น',
+              severity: 'good',
+            }
 
   return [umbrella, laundry, outdoor, mask]
 }
@@ -164,10 +182,13 @@ export function getSummary(data: WeatherData): SummaryInfo {
       severity: 'warn',
     }
   }
-  if (pm25Info.severity === 'bad') {
+  if (pm25Info.severity === 'bad' && pm25) {
     return {
       headline: 'อากาศไม่ดี ฝุ่น PM2.5 สูง',
-      detail: `ค่าฝุ่น PM2.5 อยู่ที่ ${pm25} ไมโครกรัม/ลบ.ม. ควรสวมหน้ากาก`,
+      detail:
+        pm25.unit === 'aqi'
+          ? `ดัชนีคุณภาพอากาศอยู่ที่ ${pm25.value} AQI ควรสวมหน้ากาก`
+          : `ค่าฝุ่น PM2.5 อยู่ที่ ${pm25.value} ไมโครกรัม/ลบ.ม. ควรสวมหน้ากาก`,
       severity: 'bad',
     }
   }

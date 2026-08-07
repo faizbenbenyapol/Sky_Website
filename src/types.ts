@@ -10,18 +10,27 @@ export interface HourlyPoint {
   temperature: number
   rainChance: number
   weatherCode: number
+  isDay: boolean
+}
+
+// 'aqi' = ดัชนีคุณภาพอากาศจากสถานีตรวจวัดจริง (แม่นยำที่สุด), 'ugm3' = ค่าประมาณจากแบบจำลองบรรยากาศ (ความละเอียด ~40 กม.)
+export interface Pm25Reading {
+  value: number
+  unit: 'aqi' | 'ugm3'
 }
 
 export interface WeatherData {
   updatedAt: string // ISO datetime
   temperature: number
   feelsLike: number
-  humidity: number
+  tempMax: number
+  tempMin: number
   weatherCode: number
+  isDay: boolean
   rainChance: number
   rainPeakLabel: string
-  pm25: number
+  pm25: Pm25Reading | null
   hourly: HourlyPoint[]
 }
 
-export type SeverityLevel = 'good' | 'warn' | 'bad'
+export type SeverityLevel = 'good' | 'warn' | 'bad' | 'unknown'

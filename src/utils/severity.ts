@@ -1,25 +1,11 @@
 import type { SeverityLevel } from '../types'
 
-export const SEVERITY_STYLES: Record<
-  SeverityLevel,
-  { text: string; bg: string; border: string; dot: string }
-> = {
-  good: {
-    text: 'text-emerald-400',
-    bg: 'bg-emerald-400/10',
-    border: 'border-emerald-400/30',
-    dot: 'bg-emerald-400',
-  },
-  warn: {
-    text: 'text-amber-400',
-    bg: 'bg-amber-400/10',
-    border: 'border-amber-400/30',
-    dot: 'bg-amber-400',
-  },
-  bad: {
-    text: 'text-rose-400',
-    bg: 'bg-rose-400/10',
-    border: 'border-rose-400/30',
-    dot: 'bg-rose-400',
+export const SEVERITY_STYLES: Record<SeverityLevel, { text: string; bar: string }> = {
+  good: { text: 'text-[var(--color-good)]', bar: 'bg-[var(--color-good)]' },
+  warn: { text: 'text-[var(--color-warn)]', bar: 'bg-[var(--color-warn)]' },
+  bad: { text: 'text-[var(--color-bad)]', bar: 'bg-[var(--color-bad)]' },
+  unknown: {
+    text: 'text-[var(--color-text-muted)]',
+    bar: 'bg-[var(--color-text-muted)]',
   },
 }

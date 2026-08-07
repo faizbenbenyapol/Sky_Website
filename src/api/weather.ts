@@ -1,22 +1,28 @@
-import type { HourlyPoint, LocationInfo, WeatherData } from '../types'
+import type { HourlyPoint, LocationInfo, Pm25Reading, WeatherData } from '../types'
 
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
 const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality'
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
+const WAQI_URL = 'https://api.waqi.info/feed'
 
 interface ForecastResponse {
   current: {
     time: string
     temperature_2m: number
     apparent_temperature: number
-    relative_humidity_2m: number
     weather_code: number
+    is_day: number
   }
   hourly: {
     time: string[]
     temperature_2m: number[]
     precipitation_probability: number[]
     weather_code: number[]
+    is_day: number[]
+  }
+  daily: {
+    temperature_2m_max: number[]
+    temperature_2m_min: number[]
   }
 }
 
@@ -24,6 +30,58 @@ interface AirQualityResponse {
   current: {
     pm2_5: number
   }
+}
+
+interface WaqiResponse {
+  status: string
+  data?: {
+    aqi: number | string
+  }
+}
+
+// สถานีตรวจวัดจริงของกรมควบคุมมลพิษ (ผ่าน WAQI) แม่นยำกว่าแบบจำลองบรรยากาศมาก
+// ต้องตั้งค่า VITE_WAQI_TOKEN (ขอฟรีได้ที่ aqicn.org/data-platform/token) ไม่งั้นจะข้ามไปใช้ค่าประมาณการแทน
+async function fetchGroundPm25(location: LocationInfo): Promise<Pm25Reading | null> {
+  const token = import.meta.env.VITE_WAQI_TOKEN
+  if (!token) return null
+  try {
+    const res = await fetch(
+      `${WAQI_URL}/geo:${location.lat};${location.lon}/?token=${token}`,
+    )
+    if (!res.ok) return null
+    const data: WaqiResponse = await res.json()
+    const aqi = data.data?.aqi
+    if (data.status !== 'ok' || typeof aqi !== 'number' || !Number.isFinite(aqi)) {
+      return null
+    }
+    return { value: Math.round(aqi), unit: 'aqi' }
+  } catch {
+    return null
+  }
+}
+
+// ค่าประมาณการจากแบบจำลองบรรยากาศ CAMS ความละเอียด ~40 กม. ใช้เมื่อไม่มีสถานีตรวจวัดจริง
+async function fetchModelPm25(location: LocationInfo): Promise<Pm25Reading | null> {
+  const airQualityParams = new URLSearchParams({
+    latitude: String(location.lat),
+    longitude: String(location.lon),
+    current: 'pm2_5',
+    timezone: 'Asia/Bangkok',
+  })
+  try {
+    const res = await fetch(`${AIR_QUALITY_URL}?${airQualityParams.toString()}`)
+    if (!res.ok) return null
+    const data: AirQualityResponse = await res.json()
+    return { value: Math.round(data.current.pm2_5), unit: 'ugm3' }
+  } catch {
+    return null
+  }
+}
+
+async function fetchPm25(location: LocationInfo): Promise<Pm25Reading | null> {
+  const ground = await fetchGroundPm25(location)
+  if (ground) return ground
+  return fetchModelPm25(location)
 }
 
 function findRainPeak(
@@ -56,30 +114,23 @@ export async function fetchWeatherData(
   const forecastParams = new URLSearchParams({
     latitude: String(location.lat),
     longitude: String(location.lon),
-    current: 'temperature_2m,apparent_temperature,weather_code,relative_humidity_2m',
-    hourly: 'temperature_2m,precipitation_probability,weather_code',
+    current: 'temperature_2m,apparent_temperature,weather_code,is_day',
+    hourly: 'temperature_2m,precipitation_probability,weather_code,is_day',
+    daily: 'temperature_2m_max,temperature_2m_min',
     timezone: 'Asia/Bangkok',
     forecast_days: '2',
   })
 
-  const airQualityParams = new URLSearchParams({
-    latitude: String(location.lat),
-    longitude: String(location.lon),
-    current: 'pm2_5',
-    timezone: 'Asia/Bangkok',
-  })
-
-  const [forecastRes, airQualityRes] = await Promise.all([
+  const [forecastRes, pm25] = await Promise.all([
     fetch(`${FORECAST_URL}?${forecastParams.toString()}`),
-    fetch(`${AIR_QUALITY_URL}?${airQualityParams.toString()}`),
+    fetchPm25(location),
   ])
 
-  if (!forecastRes.ok || !airQualityRes.ok) {
+  if (!forecastRes.ok) {
     throw new Error('ไม่สามารถดึงข้อมูลสภาพอากาศได้')
   }
 
   const forecast: ForecastResponse = await forecastRes.json()
-  const airQuality: AirQualityResponse = await airQualityRes.json()
 
   const nowIndex = forecast.hourly.time.findIndex(
     (t) => new Date(t).getTime() >= new Date(forecast.current.time).getTime(),
@@ -105,6 +156,7 @@ export async function fetchWeatherData(
       temperature: Math.round(forecast.hourly.temperature_2m[i]),
       rainChance: forecast.hourly.precipitation_probability[i],
       weatherCode: forecast.hourly.weather_code[i],
+      isDay: forecast.hourly.is_day[i] === 1,
     })
   }
 
@@ -112,11 +164,13 @@ export async function fetchWeatherData(
     updatedAt: new Date().toISOString(),
     temperature: Math.round(forecast.current.temperature_2m),
     feelsLike: Math.round(forecast.current.apparent_temperature),
-    humidity: forecast.current.relative_humidity_2m,
+    tempMax: Math.round(forecast.daily.temperature_2m_max[0]),
+    tempMin: Math.round(forecast.daily.temperature_2m_min[0]),
     weatherCode: forecast.current.weather_code,
+    isDay: forecast.current.is_day === 1,
     rainChance,
     rainPeakLabel,
-    pm25: Math.round(airQuality.current.pm2_5),
+    pm25,
     hourly,
   }
 }

@@ -10,3 +10,12 @@ export function formatHour(iso: string): string {
   const date = new Date(iso)
   return `${String(date.getHours()).padStart(2, '0')}:00`
 }
+
+export function formatMastheadDate(date: Date): string {
+  return date.toLocaleDateString('th-TH', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
