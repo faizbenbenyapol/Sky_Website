@@ -33,12 +33,12 @@ export function KeyMetrics({ data }: KeyMetricsProps) {
         icon={Gauge}
         label="PM2.5"
         value={data.pm25 === null ? '–' : String(data.pm25.value)}
-        unit={data.pm25 === null ? undefined : data.pm25.unit === 'aqi' ? 'AQI' : 'µg/m³'}
+        unit={data.pm25 === null ? undefined : 'µg/m³'}
         valueColor={pm25Style.text}
         subLabel={
           data.pm25 === null
             ? 'ไม่พบข้อมูลฝุ่น'
-            : data.pm25.unit === 'aqi'
+            : data.pm25.source === 'station'
               ? `ระดับ${pm25Info.level} · จากสถานีจริง`
               : `ระดับ${pm25Info.level} · ประมาณการ`
         }

@@ -13,20 +13,17 @@ export interface PM25Info {
   severity: SeverityLevel
 }
 
-// เกณฑ์ AQI มาจากสถานีตรวจวัดจริง (มาตรฐาน US EPA ที่ WAQI ใช้คำนวณ)
-// เกณฑ์ µg/m³ มาจากค่าประมาณการแบบจำลองบรรยากาศ อิงเกณฑ์กรมควบคุมมลพิษไทย
+/**
+ * แปลงค่า PM2.5 (µg/m³) เป็นระดับตามเกณฑ์กรมควบคุมมลพิษ (ใช้ตั้งแต่ปี 2566)
+ * ช่วง 37.6–75 (สีส้ม) ให้เป็น 'bad' เพราะกรมควบคุมมลพิษแนะนำให้ใช้อุปกรณ์ป้องกันตั้งแต่ระดับนี้
+ * @param pm25 ค่าฝุ่น หรือ null เมื่อดึงข้อมูลไม่ได้ (คืนระดับ 'unknown')
+ */
 export function getPM25Info(pm25: Pm25Reading | null): PM25Info {
   if (pm25 === null) return { level: 'ไม่มีข้อมูล', severity: 'unknown' }
-  if (pm25.unit === 'aqi') {
-    if (pm25.value <= 50) return { level: 'ดี', severity: 'good' }
-    if (pm25.value <= 100) return { level: 'ปานกลาง', severity: 'warn' }
-    if (pm25.value <= 150) return { level: 'เริ่มมีผลกระทบต่อกลุ่มเสี่ยง', severity: 'warn' }
-    if (pm25.value <= 200) return { level: 'มีผลกระทบต่อสุขภาพ', severity: 'bad' }
-    return { level: 'มีผลกระทบต่อสุขภาพมาก', severity: 'bad' }
-  }
+  if (pm25.value <= 15) return { level: 'ดีมาก', severity: 'good' }
   if (pm25.value <= 25) return { level: 'ดี', severity: 'good' }
-  if (pm25.value <= 37) return { level: 'ปานกลาง', severity: 'warn' }
-  if (pm25.value <= 50) return { level: 'เริ่มมีผลกระทบ', severity: 'warn' }
+  if (pm25.value <= 37.5) return { level: 'ปานกลาง', severity: 'warn' }
+  if (pm25.value <= 75) return { level: 'เริ่มมีผลกระทบต่อสุขภาพ', severity: 'bad' }
   return { level: 'มีผลกระทบต่อสุขภาพ', severity: 'bad' }
 }
 
@@ -185,10 +182,7 @@ export function getSummary(data: WeatherData): SummaryInfo {
   if (pm25Info.severity === 'bad' && pm25) {
     return {
       headline: 'อากาศไม่ดี ฝุ่น PM2.5 สูง',
-      detail:
-        pm25.unit === 'aqi'
-          ? `ดัชนีคุณภาพอากาศอยู่ที่ ${pm25.value} AQI ควรสวมหน้ากาก`
-          : `ค่าฝุ่น PM2.5 อยู่ที่ ${pm25.value} ไมโครกรัม/ลบ.ม. ควรสวมหน้ากาก`,
+      detail: `ค่าฝุ่น PM2.5 อยู่ที่ ${pm25.value} ไมโครกรัม/ลบ.ม. ควรสวมหน้ากาก`,
       severity: 'bad',
     }
   }

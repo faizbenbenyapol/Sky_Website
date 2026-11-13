@@ -3,7 +3,13 @@ import type { HourlyPoint, LocationInfo, Pm25Reading, WeatherData } from '../typ
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
 const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality'
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
-const WAQI_URL = 'https://api.waqi.info/feed'
+// เรียกผ่าน proxy ของเว็บเราเอง (vite.config.ts ตอน dev, nginx.conf บนเซิร์ฟเวอร์) เพราะ Air4Thai ไม่ส่ง CORS header
+const AIR4THAI_URL = '/api/air4thai/getNewAQI_JSON.php'
+// เขตในกรุงเทพฯ ห่างสถานีที่ใกล้สุดไม่เกิน 5.2 กม. เกินนี้ค่าสถานีไม่ได้แม่นกว่าแบบจำลองแล้ว
+const MAX_STATION_DISTANCE_KM = 10
+// สถานีที่เสียมักค้างค่าเก่าไว้หลายสัปดาห์ ข้อมูลปกติอัปเดตทุกชั่วโมง
+const MAX_READING_AGE_HOURS = 3
+const EARTH_RADIUS_KM = 6371
 
 interface ForecastResponse {
   current: {
@@ -32,35 +38,68 @@ interface AirQualityResponse {
   }
 }
 
-interface WaqiResponse {
-  status: string
-  data?: {
-    aqi: number | string
-  }
+// เฉพาะฟิลด์ที่ใช้ของ Air4Thai ตัวเลขทุกตัวมาเป็น string
+interface Air4ThaiResponse {
+  stations: {
+    lat: string
+    long: string
+    AQILast: {
+      date: string // 'YYYY-MM-DD' เวลาไทย
+      time: string // 'HH:MM'
+      PM25: { value: string } // '-1' เมื่อเครื่องวัดเสีย
+    }
+  }[]
 }
 
-// สถานีตรวจวัดจริงของกรมควบคุมมลพิษ (ผ่าน WAQI) แม่นยำกว่าแบบจำลองบรรยากาศมาก
-// ต้องตั้งค่า VITE_WAQI_TOKEN (ขอฟรีได้ที่ aqicn.org/data-platform/token) ไม่งั้นจะข้ามไปใช้ค่าประมาณการแทน
-async function fetchGroundPm25(location: LocationInfo): Promise<Pm25Reading | null> {
-  const token = import.meta.env.VITE_WAQI_TOKEN
-  if (!token) return null
+/**
+ * ระยะทางตามผิวโลกระหว่างสองพิกัด (สูตร haversine)
+ * @returns ระยะทางเป็นกิโลเมตร
+ */
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180
+  const a =
+    Math.sin(toRad(lat2 - lat1) / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lon2 - lon1) / 2) ** 2
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a))
+}
+
+/**
+ * ค่า PM2.5 จากสถานีของกรมควบคุมมลพิษที่ใกล้ตำแหน่งนี้ที่สุด
+ * ข้ามสถานีที่ค่าเสีย (ติดลบ/ไม่ใช่ตัวเลข) หรือข้อมูลเก่ากว่า MAX_READING_AGE_HOURS
+ * @returns ค่า µg/m³ ปัดเป็นจำนวนเต็ม หรือ null ถ้าไม่มีสถานีที่ใช้ได้ภายใน MAX_STATION_DISTANCE_KM
+ * ผลข้างเคียง: ส่ง request ไปที่ proxy หนึ่งครั้ง (ได้ข้อมูลทุกสถานีทั่วประเทศ ~140 KB)
+ */
+async function fetchStationPm25(location: LocationInfo): Promise<Pm25Reading | null> {
+  let data: Air4ThaiResponse
   try {
-    const res = await fetch(
-      `${WAQI_URL}/geo:${location.lat};${location.lon}/?token=${token}`,
-    )
+    const res = await fetch(AIR4THAI_URL)
     if (!res.ok) return null
-    const data: WaqiResponse = await res.json()
-    const aqi = data.data?.aqi
-    if (data.status !== 'ok' || typeof aqi !== 'number' || !Number.isFinite(aqi)) {
-      return null
-    }
-    return { value: Math.round(aqi), unit: 'aqi' }
+    data = await res.json()
   } catch {
+    // Air4Thai ล่มหรือ proxy ใช้ไม่ได้ ยอมรับได้เพราะ fetchPm25 จะไปใช้ค่าจากแบบจำลองแทน
     return null
   }
+
+  const oldestMs = Date.now() - MAX_READING_AGE_HOURS * 60 * 60 * 1000
+  let nearest: { km: number; value: number } | null = null
+  for (const station of data.stations) {
+    const { date, time, PM25 } = station.AQILast
+    const value = Number(PM25.value)
+    const readAtMs = new Date(`${date}T${time}:00+07:00`).getTime()
+    const isValidValue = Number.isFinite(value) && value >= 0
+    // วันที่ผิดรูปแบบจะได้ NaN ซึ่งเทียบแล้วเป็น false จึงถูกนับว่าเก่าไปด้วย
+    const isFresh = readAtMs >= oldestMs
+    if (!isValidValue || !isFresh) continue
+
+    const km = distanceKm(location.lat, location.lon, Number(station.lat), Number(station.long))
+    if (nearest === null || km < nearest.km) nearest = { km, value }
+  }
+
+  if (nearest === null || nearest.km > MAX_STATION_DISTANCE_KM) return null
+  return { value: Math.round(nearest.value), source: 'station' }
 }
 
-// ค่าประมาณการจากแบบจำลองบรรยากาศ CAMS ความละเอียด ~40 กม. ใช้เมื่อไม่มีสถานีตรวจวัดจริง
+// ค่าประมาณการจากแบบจำลองบรรยากาศ CAMS ความละเอียด ~40 กม. ใช้เมื่อไม่มีสถานีตรวจวัดจริงใกล้พอ
 async function fetchModelPm25(location: LocationInfo): Promise<Pm25Reading | null> {
   const airQualityParams = new URLSearchParams({
     latitude: String(location.lat),
@@ -72,15 +111,16 @@ async function fetchModelPm25(location: LocationInfo): Promise<Pm25Reading | nul
     const res = await fetch(`${AIR_QUALITY_URL}?${airQualityParams.toString()}`)
     if (!res.ok) return null
     const data: AirQualityResponse = await res.json()
-    return { value: Math.round(data.current.pm2_5), unit: 'ugm3' }
+    return { value: Math.round(data.current.pm2_5), source: 'model' }
   } catch {
     return null
   }
 }
 
+// ใช้ค่าจากสถานีจริงก่อน ไม่มีค่อยใช้ค่าประมาณจากแบบจำลอง คืน null เมื่อดึงไม่ได้ทั้งสองแหล่ง
 async function fetchPm25(location: LocationInfo): Promise<Pm25Reading | null> {
-  const ground = await fetchGroundPm25(location)
-  if (ground) return ground
+  const station = await fetchStationPm25(location)
+  if (station) return station
   return fetchModelPm25(location)
 }
 
