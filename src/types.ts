@@ -13,10 +13,11 @@ export interface HourlyPoint {
   isDay: boolean
 }
 
-// 'aqi' = ดัชนีคุณภาพอากาศจากสถานีตรวจวัดจริง (แม่นยำที่สุด), 'ugm3' = ค่าประมาณจากแบบจำลองบรรยากาศ (ความละเอียด ~40 กม.)
+// ค่าฝุ่น PM2.5 หน่วย µg/m³ เสมอ
+// 'station' = สถานีตรวจวัดจริงของกรมควบคุมมลพิษ (Air4Thai), 'model' = ค่าประมาณจากแบบจำลอง CAMS (ความละเอียด ~40 กม.)
 export interface Pm25Reading {
   value: number
-  unit: 'aqi' | 'ugm3'
+  source: 'station' | 'model'
 }
 
 export interface WeatherData {
